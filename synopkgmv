@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script moves installed packages between Synology volumes
+# This script moves installed packages between Synology volumes.
 # Use at your own risk!
 
 # Exit on error
@@ -148,13 +148,13 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-# source volume number
+# Source volume number
 svn=$1
 
-# destination volume number
+# Destination volume number
 dvn=$2
 
-# package name
+# Package name
 pn=$3
 
 # Check DSM version
