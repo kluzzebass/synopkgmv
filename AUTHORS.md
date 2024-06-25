@@ -1,4 +1,7 @@
 # AUTHORS file for `synopkgmv`
 
-- Jan Fredrik Leversund <kluzz@radical.org>
-    - Project Founder and Lead Developer
+## Core Team
+
+- **Jan Fredrik Leversund** <kluzz@radical.org>
+  - Role: Project Founder and Lead Developer
+  - Contributions: Initial project setup, core architecture, major feature implementations.
