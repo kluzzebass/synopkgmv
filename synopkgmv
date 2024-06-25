@@ -1,0 +1,177 @@
+#!/bin/bash
+
+# This script moves installed packages between Synology volumes
+# Use at your own risk!
+
+# Exit on error
+set -e
+
+# Print usage
+# $0 - script name
+function usage {
+	echo "Usage: $0 <src volume number> <dst volume num> <package name>"
+	exit 1
+}
+
+function check_dsm_version {
+	support="This script should only run Synology DSM 7.0 and above"
+
+	if [ ! -f /etc.defaults/VERSION ]; then
+		echo $support
+		exit 1
+	fi
+	source /etc.defaults/VERSION
+	if [ "$majorversion" -lt 7 ]; then
+		echo $support
+		exit 1
+	fi
+}
+
+# Check if volume exists
+# $1 - volume number
+function check_volume {
+	if [ ! -d "/volume$1" ]; then
+		echo "Volume $1 not found"
+		exit 1
+	fi
+}
+
+# Check if package exists
+# $1 - volume number
+# $2 - package name
+function check_package {
+	if [ ! -d "/volume$1/@appstore/$2" ]; then
+		echo "Package $2 not found on volume $1"
+		exit 1
+	fi
+}
+
+# Check if package is already installed on destination volume
+# $1 - destination volume number
+# $2 - package name
+function check_package_installed {
+	if [ -d "/volume$1/@appstore/$2" ]; then
+		echo "Package $2 already exists on volume $1"
+		exit 1
+	fi
+}
+
+
+# Relink a package subdirectory
+# $1 - destination volume number
+# $2 - package name
+# $3 - app directory
+# $4 - subdirectory
+function relink {
+	rm -f "/var/packages/$2/$4"
+	ln -s "/volume$1/$3/$2" "/var/packages/$2/$4"
+}
+
+# Move package
+# $1 - source volume number
+# $2 - destination volume number
+# $3 - package name
+function move_package {
+	echo "Moving $3 from volume $1 to volume $2"
+
+	# Stop the package
+	echo "Stopping package..."
+	synopkg stop $1 2>&1 > /dev/null
+
+	# Prepare destination volume directories
+	echo "Preparing destination volume"
+	mkdir -p "/volume$1/@appconf"
+	mkdir -p "/volume$1/@apphome"
+	mkdir -p "/volume$1/@appstore"
+	mkdir -p "/volume$1/@apptemp"
+	mkdir -p "/volume$1/@appdata"
+
+	# Copy package directories first to avoid ending up in an
+	# inconsistent state if the copy operation is interrupted
+	echo "Copying package directories"
+	cp -a "/volume$1/@appconf/$3" "/volume$2/@appconf"
+	cp -a "/volume$1/@apphome/$3" "/volume$2/@apphome"
+	cp -a "/volume$1/@appstore/$3" "/volume$2/@appstore"
+	cp -a "/volume$1/@apptemp/$3" "/volume$2/@apptemp"
+	cp -a "/volume$1/@appdata/$3" "/volume$2/@appdata"
+
+	# Make the package links point to the new location
+	echo "Relinking package directories"
+	relink $2 $3 @appconf etc
+	relink $2 $3 @apphome home
+	relink $2 $3 @appstore target
+	relink $2 $3 @apptemp tmp
+	relink $2 $3 @appdata var
+
+
+	echo "Cleaning up"
+	rm -rf "/volume$1/@appconf/$3"
+	rm -rf "/volume$1/@apphome/$3"
+	rm -rf "/volume$1/@appstore/$3"
+	rm -rf "/volume$1/@apptemp/$3"
+	rm -rf "/volume$1/@appdata/$3"
+
+	# Start the package
+	echo "Starting package"
+	set +e
+	synopkg start $1 2>&1 > /dev/null
+	set -e
+
+	echo "Package $3 moved successfully from volume $1 to volume $2"
+}
+
+# Check the number of arguments
+if [ "$#" -ne 3 ]; then
+	usage
+fi
+
+# Check if source volume number is a number
+if ! [[ $1 =~ ^[0-9]+$ ]]; then
+	echo "Source volume number must be a number"
+	exit 1
+fi
+
+# Check if destination volume number is a number
+if ! [[ $2 =~ ^[0-9]+$ ]]; then
+	echo "Destination volume number must be a number"
+	exit 1
+fi
+
+# Check that the volumes are different
+if [ "$1" -eq "$2" ]; then
+	echo "Source and destination volumes must be different"
+	exit 1
+fi
+
+# Needs to run as root
+if [ "$(id -u)" -ne 0 ]; then
+	echo "This script needs to be run as root"
+	exit 1
+fi
+
+# source volume number
+svn=$1
+
+# destination volume number
+dvn=$2
+
+# package name
+pn=$3
+
+# Check DSM version
+check_dsm_version
+
+# Check if source volume exists
+check_volume $svn
+
+# Check if destination volume exists
+check_volume $dvn
+
+# Check if package exists on source volume
+check_package $svn $pn
+
+# Check if package is already installed on destination volume
+check_package_installed $dvn $pn
+
+# Move the package
+move_package $svn $dvn $pn

@@ -1,2 +1,2 @@
 # synopkgmv
-Move Synology packages between volumes.
+Move Synology packages between volumes on DSM 7.
